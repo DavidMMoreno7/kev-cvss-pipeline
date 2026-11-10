@@ -1,6 +1,9 @@
 import requests
 import pandas as pd
 import json
+import time
+# Import our reusable functions for retrieving NVD vulnerability data
+from nvd_lookup import get_cve_data, get_cvss_score
 
 # ==========================================
 # 1. PROJECT SETTINGS
@@ -119,7 +122,7 @@ for number, (_, row) in enumerate(display_df.iterrows(), start=1):
 vendor_counts = recent_vulnerabilities["vendorProject"].value_counts()
 
 #Display the five vendors with the most KEV entries
-print("|n===== Top 5 VENDORS =====")
+print("\n===== Top 5 VENDORS =====")
 print(vendor_counts.head(5))
 
 # ==========================================
@@ -149,3 +152,108 @@ recent_vulnerabilities.to_csv(
 
 # Confirm that the file was saved
 print("\nVulnerability data saved successfully!")
+
+# ==========================================
+# 9. LOOK UP CVSS SCORES FOR MULTIPLE CVEs
+# ==========================================
+
+# Create a list to store the results of our NVD lookups
+cvss_results = []
+
+# Select the first 3 vulnerabilities for testing
+test_vulnerabilities = recent_vulnerabilities.head(3)
+
+# Loop through each vulnerability in our test dataset
+for _, row in test_vulnerabilities.iterrows():
+
+    # Get the CVE identifier from the current row
+    cve_id = row["cveID"]
+
+    print("\nLooking up:", cve_id)
+
+    # Request vulnerability information from NVD
+    nvd_data = get_cve_data(cve_id)
+
+    # Extract its CVSS 3.1 score and severity
+    cvss_result = get_cvss_score(nvd_data)
+
+    # Check whether CVSS information was available
+    if cvss_result is not None:
+        score, severity = cvss_result
+    else:
+        # Store missing scores as None instead of guess
+        score, severity = None, None
+
+    # Save the information in a dictionary
+    cvss_results.append({
+        "cveID": cve_id,
+        "cvssScore": score,
+        "severity": severity
+    })
+
+    # Display the result
+    print("Score:", score)
+    print("Severity:", severity)
+
+    # Pause between API requests to respect rate limits
+    time.sleep(6)
+
+
+# ==========================================
+# 10. DISPLAY FINAL NVD RESULTS
+# ==========================================
+
+# Convert our collected results into a pandas DataFrame
+# This happens after all three vulnerabilities have been processed
+cvss_df = pd.DataFrame(cvss_results)
+
+# Display our results in one table
+print("\n===== NVD CVSS RESULTS =====")
+print(cvss_df.to_string(index=False))
+
+
+# ==========================================
+# 11. SAVE NVD CVSS RESULTS
+# ==========================================
+
+# Save the CVSS scores we retrieved from NVD
+# This creates a CVS file that pandas can read later
+cvss_df.to_csv(
+    "data/processed/nvd_cvss_scores.csv",
+    index=False
+)
+
+# Confirm that the file was saved successfully
+print("\nNVD CVSS scores saved successfully!")
+
+
+# ==========================================
+# 12. COMBINE CISA AND NVD DATA
+# ==========================================
+
+# Join our CISA vulnerability records wirh NVD scores
+# The cveID column is present in both datasets
+# A left join keeps all CISA records, even without NVD scores
+combined_df = recent_vulnerabilities.merge(
+    cvss_df,
+    on="cveID",
+    how="left"
+)
+
+# Select the columns we want to display
+combined_columns = [
+    "cveID",
+    "vendorProject",
+    "dateAdded",
+    "cvssScore",
+    "severity"
+]
+
+# Display the combined table
+print("\n===== COMBINED CISA + NVD DATA =====")
+print(combined_df[combined_columns].to_string(index=False))
+
+
+
+
+

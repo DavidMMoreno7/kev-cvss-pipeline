@@ -90,3 +90,5 @@ print("\n===== CVSS INFORMATION =====")
 print("CVE ID:", cve_id)
 print("CVSS Score:", cvss_score)
 print("Severity:", cvss_severity)
+
+
